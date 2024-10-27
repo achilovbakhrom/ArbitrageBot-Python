@@ -32,6 +32,8 @@ class Coin(Enum):
     DOGE = 'DOGE'
     SHIB = 'SHIB'
     PEPE = 'PEPE'
+    MKR = 'MKR'
+    QNT = 'QNT'
 
     def __str__(self) -> str:
         return self.value
@@ -41,9 +43,13 @@ BASE_COIN = Coin.USDT
 
 chains = [
     f'{Coin.USDT}-{Coin.AVAX}-{Coin.BTC}-{Coin.USDT}', # usdt - avax - btc - usdt
-    f'{Coin.USDT}-{Coin.SOL}-{Coin.BTC}-{Coin.USDT}', # usdt - sol - btc - usdt
     f'{Coin.USDT}-{Coin.XLM}-{Coin.BTC}-{Coin.USDT}', # usdt - xlm - btc - usdt
     f'{Coin.USDT}-{Coin.XRP}-{Coin.BTC}-{Coin.USDT}', # usdt - xrp - btc - usdt
+    f'{Coin.USDT}-{Coin.LDO}-{Coin.BTC}-{Coin.USDT}', # usdt - ldo  - btc - usdt
+    f'{Coin.USDT}-{Coin.MKR}-{Coin.BTC}-{Coin.USDT}', # usdt - ldo  - btc - usdt
+    f'{Coin.USDT}-{Coin.QNT}-{Coin.BTC}-{Coin.USDT}', # usdt - ldo  - btc - usdt
+    f'{Coin.USDT}-{Coin.DOGE}-{Coin.BTC}-{Coin.USDT}', # usdt - ldo  - btc - usdt
+    f'{Coin.USDT}-{Coin.SHIB}-{Coin.DOGE}-{Coin.BTC}-{Coin.USDT}', # usdt - ldo  - btc - usdt
 ]
 
 #AWS
@@ -70,12 +76,15 @@ def to_pairs(arg: str) -> [str]:
 
     return result
 
+def check_order(order_id: int):
+    pass
 
 @shared_task
 def heavy_task():
     client = Client()
+    # client.testnet = True
     total: float = 0
-    for _ in range(100):
+    for _ in range(10000):
         for chain in chains:
             pairs = to_pairs(chain)
             begin_amount = AMOUNT
@@ -98,6 +107,7 @@ def heavy_task():
             result = 0
 
             if diff / begin_amount > THRESHOLD: # ratio
+
                 # trading part
                 traded = True
                 for [idx, pair] in enumerate(pairs):
