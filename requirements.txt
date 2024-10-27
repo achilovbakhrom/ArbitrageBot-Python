@@ -1,0 +1,4 @@
+Django~=4.2.16
+celery==5.4.0
+redis==5.2.0
+python-binance==1.0.21
