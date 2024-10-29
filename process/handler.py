@@ -1,98 +1,23 @@
-from enum import Enum
-
 from celery import shared_task
 import time
-from binance.client import Client
-from django.db.models.expressions import result
 
-SPLITTER = '-'
-AMOUNT = 1000 # means $1000
-USER_THRESHOLD = 0.0003 # means if THRESHOLD gt $0.5 0.1$
-BINANCE_SLIPPAGE = 0.001
-
-THRESHOLD = USER_THRESHOLD + BINANCE_SLIPPAGE
-
-# 0.001%
-
-class Coin(Enum):
-    USDT = 'USDT'
-    XRP = 'XRP'
-    XLM = 'XLM'
-    ETH = 'ETH'
-    BTC = 'BTC'
-    BNB = 'BNB'
-    ADA = 'ADA'
-    AVAX = 'AVAX'
-    SOL = 'SOL'
-    ATOM = 'ATOM'
-    DOT = 'DOT'
-    DYDX = 'DYDX'
-    EGLD = 'EGLD'
-    LDO = 'LDO'
-    DOGE = 'DOGE'
-    SHIB = 'SHIB'
-    PEPE = 'PEPE'
-    MKR = 'MKR'
-    QNT = 'QNT'
-
-    def __str__(self) -> str:
-        return self.value
-
-
-BASE_COIN = Coin.USDT
-
-chains = [
-    f'{Coin.USDT}-{Coin.AVAX}-{Coin.BTC}-{Coin.USDT}', # usdt - avax - btc - usdt
-    f'{Coin.USDT}-{Coin.XLM}-{Coin.BTC}-{Coin.USDT}', # usdt - xlm - btc - usdt
-    f'{Coin.USDT}-{Coin.XRP}-{Coin.BTC}-{Coin.USDT}', # usdt - xrp - btc - usdt
-    f'{Coin.USDT}-{Coin.LDO}-{Coin.BTC}-{Coin.USDT}', # usdt - ldo  - btc - usdt
-    f'{Coin.USDT}-{Coin.MKR}-{Coin.BTC}-{Coin.USDT}', # usdt - ldo  - btc - usdt
-    f'{Coin.USDT}-{Coin.QNT}-{Coin.BTC}-{Coin.USDT}', # usdt - ldo  - btc - usdt
-    f'{Coin.USDT}-{Coin.DOGE}-{Coin.BTC}-{Coin.USDT}', # usdt - ldo  - btc - usdt
-    f'{Coin.USDT}-{Coin.SHIB}-{Coin.DOGE}-{Coin.BTC}-{Coin.USDT}', # usdt - ldo  - btc - usdt
-]
-
-#AWS
-
-def to_pairs(arg: str) -> [str]:
-    if SPLITTER not in arg:
-        raise ValueError(f'{arg} does not contain {SPLITTER}')
-
-    splitted = arg.split(SPLITTER)
-
-    length = len(splitted)
-
-    if length <= 2:
-        raise ValueError(f'{arg} should contain more than 2 coins')
-
-    result: [str] = []
-    for [index, coin] in enumerate(splitted):
-        if index < length - 1:
-            next_coin = splitted[index + 1]
-            if coin == BASE_COIN.value:
-                result.append(f'{next_coin}{coin}')
-            else:
-                result.append(f'{coin}{next_coin}')
-
-    return result
-
-def check_order(order_id: int):
-    pass
+from process.CachedClient import CachedClient
+from .config import chains, AMOUNT, THRESHOLD, REPEAT_TIMES, DEBUG
+from .utils import to_pairs
 
 @shared_task
 def heavy_task():
-    client = Client()
-    # client.testnet = True
+    client = CachedClient()
+
     total: float = 0
-    for _ in range(10000):
+    for _ in range(REPEAT_TIMES):
         for chain in chains:
             pairs = to_pairs(chain)
             begin_amount = AMOUNT
             result: float = 0
             for [idx, pair] in enumerate(pairs):
                 time.sleep(0.3)
-                ticker = client.get_ticker(symbol=pair)
-                price = float(ticker["lastPrice"])
+                price = client.get_last_price_of_symbol(symbol=pair)
                 print(f'ticker: {pair} {price}')
                 if idx == 0:
                     result = begin_amount / price
@@ -100,43 +25,56 @@ def heavy_task():
                     result *= price
 
             diff = result - begin_amount
-            print(f'result: {result}')
-            print(f'diff: {diff / begin_amount} {THRESHOLD}')
+            calc_threshold = diff / begin_amount
+            print(f''
+                  f'calculated_result: {result},'
+                  f'diff: {diff},'
+                  f'calc_threshold: {calc_threshold},'
+                  f'threshold: {THRESHOLD},'
+                  f'isTrade: {calc_threshold > THRESHOLD}'
+                )
+
+            if DEBUG:
+                continue
+
             traded = False
 
-            result = 0
+            initial_amount = AMOUNT
+            qty = AMOUNT
+            trade_result = 0.0
 
-            if diff / begin_amount > THRESHOLD: # ratio
-
-                # trading part
+            if calc_threshold > THRESHOLD: # ratio
                 traded = True
-                for [idx, pair] in enumerate(pairs):
-                    ticker = client.get_ticker(symbol=pair) # usdt - avax - btc - usdt
-                    price = float(ticker["lastPrice"])
-                    print(f'ticker: {pair} {price}')
-                    if idx == 0:
-                        result = begin_amount / price
-                    else:
-                        result *= price
-                    time.sleep(2)
 
+                for [idx, symbol] in enumerate(pairs):
+                    print(f'symbol: {symbol}')
+                    if idx == 0:
+                        order, err_msg = client.create_buy_order(symbol=symbol, amount=qty)
+                    else:
+                        order, err_msg = client.create_sell_order(symbol=symbol, amount=qty)
+
+                    if order is None:
+                        raise ValueError(err_msg)
+
+                    order = client.check_order(order=order, symbol=symbol)
+
+                    if order is None:
+                        raise ValueError('Order check is failed')
+
+                    qty = float(order['cummulativeQuoteQty'])
+
+                    if idx == len(pairs) - 1:
+                        trade_result = qty
+                        print('traded successfully')
 
             if traded:
-                diff = result - begin_amount
+                diff = trade_result - initial_amount
                 total += diff
                 print('----------------******----------------\n\n')
-                print(f'BEGIN_AMOUNT: {begin_amount}')
-                print(f'PROFIT: {result - begin_amount}')
+                print(f'BEGIN_AMOUNT: {initial_amount}')
+                print(f'PROFIT: {diff}')
                 print(f'TOTAL IN CYCLE: {total}')
                 print('----------------******----------------\n\n')
 
 
-
-
     return 'task completed'
-
-# 1. profit for pair
-# 2. if condition allows - trade 1000 * 0
-
-# 1. real trade try
-# 2. BTC - XLM - 1000$ волатильность
