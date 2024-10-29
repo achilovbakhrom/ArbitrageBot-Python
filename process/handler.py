@@ -9,6 +9,15 @@ from .utils import to_pairs
 def heavy_task():
     client = CachedClient()
 
+    # buy_order = client.create_buy_order(symbol='BTCUSDT', amount=200)
+    # print(f'buy_order: {buy_order}')
+    # sell_order = client.create_sell_order(symbol='DOGEBTC', amount=291.0)
+    # print(f'sell_order: {sell_order}')
+    #
+    #
+    #
+    # return ''
+
     total: float = 0
     for _ in range(REPEAT_TIMES):
         for chain in chains:
@@ -16,7 +25,7 @@ def heavy_task():
             begin_amount = AMOUNT
             result: float = 0
             for [idx, pair] in enumerate(pairs):
-                time.sleep(0.3)
+                time.sleep(0.05)
                 price = client.get_last_price_of_symbol(symbol=pair)
                 print(f'ticker: {pair} {price}')
                 if idx == 0:
@@ -48,7 +57,8 @@ def heavy_task():
 
                 for [idx, symbol] in enumerate(pairs):
                     print(f'symbol: {symbol}')
-                    if idx == 0:
+                    is_buy = idx == 0
+                    if is_buy:
                         order, err_msg = client.create_buy_order(symbol=symbol, amount=qty)
                     else:
                         order, err_msg = client.create_sell_order(symbol=symbol, amount=qty)
@@ -60,8 +70,10 @@ def heavy_task():
 
                     if order is None:
                         raise ValueError('Order check is failed')
-
-                    qty = float(order['cummulativeQuoteQty'])
+                    if is_buy:
+                        qty = float(order['executedQty'])
+                    else:
+                        qty = float(order['cummulativeQuoteQty'])
 
                     if idx == len(pairs) - 1:
                         trade_result = qty

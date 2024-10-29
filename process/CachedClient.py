@@ -1,12 +1,14 @@
 from binance import Client
 from binance.exceptions import BinanceAPIException
-from .config import API_KEY, API_SECRET
+from .config import API_KEY, API_SECRET, DEBUG
 from .enums import InternalOrderType
+from decimal import Decimal, ROUND_DOWN
+
 
 
 class CachedClient:
     def __init__(self):
-        self.client = Client(testnet=True, api_key=API_KEY, api_secret=API_SECRET)
+        self.client = Client(testnet=DEBUG, api_key=API_KEY, api_secret=API_SECRET)
         self.cache: dict = {}
 
     def get_symbol_info(self, symbol: str):
@@ -89,18 +91,35 @@ class CachedClient:
 
         if asset is None:
             return None, 'Cannot get quote asset'
-        balance = self.get_asset_balance(asset=asset)
-        final_amount = amount
-        if balance < final_amount:
-            if 0.95 * final_amount < balance:
-                final_amount = balance
-            else:
-                return None, 'Insufficient funds'
-        print(f'balance: {balance}, asset: {asset}, final_amount: {final_amount}, type: {order_type}')
+        # balance = self.get_asset_balance(asset=asset)
+        final_amount = Decimal(str(amount))
+        # print(f'balance: {balance}, final_amount: {final_amount}')
+        # if balance < final_amount:
+        #     if 0.95 * final_amount < balance:
+        #         final_amount = balance
+        #     else:
+        #         return None, 'Insufficient funds'
+        symbol_info = self.client.get_symbol_info(symbol)
+        lot_size = next(filter for filter in symbol_info['filters'] if filter['filterType'] == 'LOT_SIZE')
+        min_qty = float(lot_size['minQty'])
+        max_qty = float(lot_size['maxQty'])
+        step_size = lot_size['stepSize']
+        print(f"LOT_SIZE rules - minQty: {min_qty}, maxQty: {max_qty}, stepSize: {step_size}")
+        ss = Decimal(step_size)
+
+        # adjusted_amount = final_amount - (final_amount % step_size)
+        adjusted_amount = (final_amount // ss) * ss
+
+        adjusted_amount = adjusted_amount.quantize(ss, rounding=ROUND_DOWN)
+
+
+
+        # print(f'balance: {balance}, asset: {asset}, final_amount: {final_amount}, adjusted_amount: {adjusted_amount}, type: {order_type}')
+        print(f'asset: {asset}, final_amount: {final_amount}, adjusted_amount: {adjusted_amount}, type: {order_type}')
         if order_type == InternalOrderType.SELL:
-            order = self.client.order_market_sell(symbol=symbol, quantity=final_amount)
+            order = self.client.order_market_sell(symbol=symbol, quantity=float(adjusted_amount))
         else:
-            order = self.client.order_market_buy(symbol=symbol, quoteOrderQty=final_amount)
+            order = self.client.order_market_buy(symbol=symbol, quoteOrderQty=float(adjusted_amount))
 
         return order, None
 

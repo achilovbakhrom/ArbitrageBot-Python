@@ -20,6 +20,12 @@ class Coin(Enum):
     PEPE = 'PEPE'
     MKR = 'MKR'
     QNT = 'QNT'
+    LINK = 'LINK'
+    TRY = 'TRY'
+    TRX = 'TRX'
+    BCH = 'BCH'
+    FTM = 'FTM'
+    LTC = 'LTC'
 
     def __str__(self) -> str:
         return self.value
