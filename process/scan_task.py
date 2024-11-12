@@ -126,4 +126,5 @@ def start_scan():
     output_filename = get_next_filename()
     save_to_file(output_filename, arbitrage_opportunities)
 
+
     return 'task completed'
