@@ -1,4 +1,5 @@
 from .enums import Coin
+from decimal import Decimal
 
 def to_pairs(arg: str) -> [str]:
     SPLITTER = '-'
@@ -25,3 +26,5 @@ def to_pairs(arg: str) -> [str]:
 
     return result
 
+def number_to_decimal(arg: float):
+    return Decimal(str(arg))

@@ -1,5 +1,8 @@
+import requests
+
 from binance import Client
 from binance.exceptions import BinanceAPIException
+
 from .config import API_KEY, API_SECRET, DEBUG
 from .enums import InternalOrderType
 from decimal import Decimal, ROUND_DOWN
@@ -66,10 +69,19 @@ class CachedClient:
         try:
             ticker = self.client.get_ticker(symbol=symbol)
             price = float(ticker["lastPrice"])
-            return price
+            print(f'symbol: {symbol}, price: {price}')
+            return symbol, price
         except BinanceAPIException as e:
             print(f"Error fetching ticker info for {symbol}: {e}")
             return 0.0
+
+    def get_binance_prices(self):
+        url = 'https://api.binance.com/api/v3/ticker/price'
+        response = requests.get(url)
+        data = response.json()
+        prices = [(item['symbol'][:3], item['symbol'][3:], item['price']) for item in data]
+        symbol_dict = {f"{base}{quote}": Decimal(price) for base, quote, price in prices}
+        return symbol_dict
 
     # Before creation of order need to check followings
     # 1. Check Balance
@@ -108,14 +120,13 @@ class CachedClient:
         ss = Decimal(step_size)
 
         # adjusted_amount = final_amount - (final_amount % step_size)
-        adjusted_amount = (final_amount // ss) * ss
+        adjusted_amount = final_amount if ss > final_amount else  (final_amount // ss) * ss
+        print(f'sss {adjusted_amount} {final_amount} {ss}')
 
         adjusted_amount = adjusted_amount.quantize(ss, rounding=ROUND_DOWN)
 
-
-
         # print(f'balance: {balance}, asset: {asset}, final_amount: {final_amount}, adjusted_amount: {adjusted_amount}, type: {order_type}')
-        print(f'asset: {asset}, final_amount: {final_amount}, adjusted_amount: {adjusted_amount}, type: {order_type}')
+        print(f'symbol: {symbol}, final_amount: {final_amount}, adjusted_amount: {adjusted_amount}, type: {order_type}')
         if order_type == InternalOrderType.SELL:
             order = self.client.order_market_sell(symbol=symbol, quantity=float(adjusted_amount))
         else:

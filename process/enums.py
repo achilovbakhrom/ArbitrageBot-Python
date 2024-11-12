@@ -26,6 +26,15 @@ class Coin(Enum):
     BCH = 'BCH'
     FTM = 'FTM'
     LTC = 'LTC'
+    CHR = 'CHR'
+    ARB = 'ARB'
+    GAL = 'GAL'
+    EDU = 'EDU'
+    TUSD = 'TUSD'
+    JASMY = 'JASMY'
+    SNT = 'SNT'
+    COS = 'COS'
+    GALA = 'GALA'
 
     def __str__(self) -> str:
         return self.value
