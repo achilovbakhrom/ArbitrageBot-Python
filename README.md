@@ -1,0 +1,1 @@
+# celery -A ArbitrageBot worker --loglevel=info
